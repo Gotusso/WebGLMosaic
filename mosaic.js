@@ -1,192 +1,167 @@
 (function() {
 	var SIZE_FACTOR = 22;
-	var TRANSITION_LENGTH = 5000;
+	var CYCLE_ANIMATION_TIME = 6000;
 	var FLIP_ANIMATION_TIME = 3000;
-	var COLOR_ANIMATION_TIME = 1500;
+	var COLOR_ANIMATION_TIME = FLIP_ANIMATION_TIME / 4;
 
-	var scene = new THREE.Scene();
-	//var camera = new THREE.OrthographicCamera( window.innerWidth / - 2, window.innerWidth / 2, window.innerHeight / 2, window.innerHeight / - 2, 0, 1000 );
-	var camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-	camera.position.x = window.innerWidth / 2;
-	camera.position.y = window.innerHeight / 2;
-	camera.position.z = 630;
-
-	var i = 0;
-	var w = 0;
-	var h = 0;
+	// Setup the scene. Build triangle variations and asign to each of 
+	// them the colors for the animation
 	var size = window.innerWidth / SIZE_FACTOR;
 
-	var shape1 = new THREE.Shape();
-	shape1.moveTo(0, 0);
-	shape1.lineTo(size, 0);
-	shape1.lineTo(0, size);
-	shape1.lineTo(0, 0);
-
-	var shape2 = new THREE.Shape();
-	shape2.moveTo(size, 0);
-	shape2.lineTo(size, size);
-	shape2.lineTo(0, size);
-	shape2.lineTo(size, 0);
-
-	var shape3 = new THREE.Shape();
-	shape3.moveTo(0, 0);
-	shape3.lineTo(size, size);
-	shape3.lineTo(size, 0);
-	shape3.lineTo(0, 0);
-
-	var shape4 = new THREE.Shape();
-	shape4.moveTo(0, 0);
-	shape4.lineTo(0, size);
-	shape4.lineTo(size, size);
-	shape4.lineTo(0, 0);
-
-	var meshes = [];
+	var geometries = [
+		new THREE.Shape([
+			new THREE.Vector2(0, 0),
+			new THREE.Vector2(size, 0),
+			new THREE.Vector2(0, size),
+			new THREE.Vector2(0, 0)
+		]),
+		new THREE.Shape([
+			new THREE.Vector2(size, 0),
+			new THREE.Vector2(size, size),
+			new THREE.Vector2(0, size),
+			new THREE.Vector2(size, 0)
+		]),
+		new THREE.Shape([
+			new THREE.Vector2(0, 0),
+			new THREE.Vector2(size, size),
+			new THREE.Vector2(size, 0),
+			new THREE.Vector2(0, 0)
+		]),
+		new THREE.Shape([
+			new THREE.Vector2(0, 0),
+			new THREE.Vector2(0, size),
+			new THREE.Vector2(size, size),
+			new THREE.Vector2(0, 0)
+		]),
+	];
+	var axixes = [
+		new THREE.Vector3(1, 1, 0).normalize(),
+		new THREE.Vector3(1, 1, 0).normalize(),
+		new THREE.Vector3(-1, 1, 0).normalize(),
+		new THREE.Vector3(-1, 1, 0).normalize()
+	];
+	var makeColor = function(channel) {
+		return {
+			r: channel === 'r' ? 1 : Math.random() * 0.7,
+			g: channel === 'g' ? 1 : Math.random() * 0.7,
+			b: channel === 'b' ? 1 : Math.random() * 0.7,
+		};
+	};
+	
+	var w = 0;
+	var h = 0;
+	var triangles = [];
+	var scene = new THREE.Scene();
 	while (h < window.innerHeight) {
 		while (w < window.innerWidth) {
-			var even = i % 2 === 0;
-			var downShape = even ? shape1 : shape3;
-			var upShape = even ? shape2 : shape4;
+			var geometry = geometries[triangles.length % geometries.length];
+			var axis = axixes[triangles.length % geometries.length];
+			var colors = [makeColor('r'), makeColor('g'), makeColor('b')];
+			var pivot = new THREE.Object3D();
+			var triangle = new THREE.Mesh(
+				new THREE.ShapeGeometry(geometry), 
+				new THREE.MeshBasicMaterial({ color: new THREE.Color(colors[0].r, colors[0].g, colors[0].b), side: THREE.DoubleSide })
+			);			
 
-			var downColor = new THREE.Color(Math.random() * 0.7, 1, Math.random() * 0.7);
-			var upColor = new THREE.Color(Math.random() * 0.7, 1, Math.random() * 0.7);
+			triangle.position.x = - size / 2;
+			triangle.position.y = - size / 2;
+			pivot.position.x = w + size / 2;
+			pivot.position.y = h + size / 2;
 
-			var downTriangle = new THREE.Mesh(new THREE.ShapeGeometry(downShape), new THREE.MeshBasicMaterial({color: downColor, side: THREE.DoubleSide}));
-			var upTriangle = new THREE.Mesh(new THREE.ShapeGeometry(upShape), new THREE.MeshBasicMaterial({color: upColor, side: THREE.DoubleSide}));
-			
-			downTriangle.position.x = w;
-			downTriangle.position.y = h;
-			upTriangle.position.x = w;
-			upTriangle.position.y = h;
+			triangles.push({
+				mesh: triangle,
+				colors: colors,
+				pivot: pivot,
+				axis: axis
+			});
 
-			scene.add(downTriangle);
-			scene.add(upTriangle);
-			
-			meshes.push(downTriangle);
-			meshes.push(upTriangle);
+			pivot.add(triangle);
+			scene.add(pivot);
 
-			i++;
-			w += size;
+			if (triangles.length % 2 === 0) {
+				w += size;
+			}
 		}
 
 		w = 0;
 		h += size;
 	}
 
-	window.addEventListener('resize', function() {
-		camera.aspect = window.innerWidth / window.innerHeight;
-		camera.updateProjectionMatrix();
-		renderer.setSize(window.innerWidth, window.innerHeight);
-	}, false);
-
-	// Robert Penner’s style animations
+	// Setup the animation. On each frame we're going to interpolate the rotation and
+	// color of each triangle with Robert Penner’s style animation functions.
 	var animate = {
 		inBack: function(timestamp, begin, end, total) {
+			if (timestamp > total) {
+				return end;
+			}
 			return (function(t, b, c, d, s) {
-				if (s == undefined) s = 1.70158;
+				if (s == undefined) {
+					s = 1.70158;
+				}
 				return c*(t/=d)*t*((s+1)*t - s) + b
 			})(timestamp, begin, end - begin, total);
 		},
 		inOutBack: function(timestamp, begin, end, total) {
+			if (timestamp > total) {
+				return end;
+			}
 			return (function(t, b, c, d, s) {
-				if (s == undefined) s = 1.70158; 
-				if ((t/=d/2) < 1) return c/2*(t*t*(((s*=(1.525))+1)*t - s)) + b;
+				if (s == undefined) {
+					s = 1.70158;
+				}
+				if ((t/=d/2) < 1) {
+					return c/2*(t*t*(((s*=(1.525))+1)*t - s)) + b;
+				}
 				return c/2*((t-=2)*t*(((s*=(1.525))+1)*t + s) + 2) + b
 			})(timestamp, begin, end - begin, total);
 		}
 	};
 
 	var triggers = [];
-	meshes.forEach(function(mesh) {
-		var fireTime = Math.random() * TRANSITION_LENGTH;
-		var lastFrame = 0;
-
-		var srcColor = mesh.material.color;
-		var dstColor = {
-			r: 1,
-			g: Math.random() * 0.7,
-			b: Math.random() * 0.7
+	triangles.forEach(function(triangle) {
+		
+		var colorAnimation = function(cycle, timestamp) {
+			triangle.mesh.material.color = new THREE.Color(
+				animate.inBack(timestamp, triangle.colors[cycle].r, triangle.colors[(cycle + 1) % 3].r, COLOR_ANIMATION_TIME),
+				animate.inBack(timestamp, triangle.colors[cycle].g, triangle.colors[(cycle + 1) % 3].g, COLOR_ANIMATION_TIME),
+				animate.inBack(timestamp, triangle.colors[cycle].b, triangle.colors[(cycle + 1) % 3].b, COLOR_ANIMATION_TIME)
+			);
+		};
+		var meshAnimation = function(cycle, timestamp) {
+			triangle.pivot.quaternion.setFromAxisAngle(
+				triangle.axis, 
+				animate.inOutBack(timestamp, 0, Math.PI, FLIP_ANIMATION_TIME)
+			);
 		};
 
-		var meshAnimations = [
-			function(timestamp) {
-				mesh.quaternion.setFromAxisAngle(
-					new THREE.Vector3(1, 1, 0).normalize(), 
-					animate.inOutBack(timestamp, 0, Math.PI, FLIP_ANIMATION_TIME));
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-				mesh.quaternion.setFromAxisAngle(
-					new THREE.Vector3(1, 1, 0).normalize(), 
-					animate.inOutBack(timestamp, Math.PI, 0, FLIP_ANIMATION_TIME));
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-			}
-		];
-		var colorAnimations = [
-			function(timestamp) {
-				mesh.material.color = new THREE.Color(
-					animate.inBack(timestamp, srcColor.r, dstColor.r, COLOR_ANIMATION_TIME),
-					animate.inBack(timestamp, srcColor.g, dstColor.g, COLOR_ANIMATION_TIME),
-					animate.inBack(timestamp, srcColor.b, dstColor.b, COLOR_ANIMATION_TIME));
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-				mesh.material.color = new THREE.Color(
-					animate.inBack(timestamp, dstColor.r, srcColor.r, COLOR_ANIMATION_TIME),
-					animate.inBack(timestamp, dstColor.g, srcColor.g, COLOR_ANIMATION_TIME),
-					animate.inBack(timestamp, dstColor.b, srcColor.b, COLOR_ANIMATION_TIME));
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-			},
-			function(timestamp) {
-			}
-		];
-
+		var meshAnimationFireTime = Math.random() * (CYCLE_ANIMATION_TIME - 1000 - FLIP_ANIMATION_TIME);
+		var colorAnimationFireTime = meshAnimationFireTime + FLIP_ANIMATION_TIME / 4;
 		triggers.push(function(timestamp) {
-			var animationTime = timestamp - fireTime;
-			if (animationTime < 0) {
-				return;
+			var cycle = Math.floor(timestamp / CYCLE_ANIMATION_TIME) % 3;
+			var meshAnimationTimestamp = timestamp % CYCLE_ANIMATION_TIME - meshAnimationFireTime;
+			var colorAnimationTimestamp = timestamp % CYCLE_ANIMATION_TIME - colorAnimationFireTime;
+			
+			if (meshAnimationTimestamp > 0) {
+				meshAnimation(cycle, meshAnimationTimestamp);
 			}
-
-			lastFrame = animationTime;
-
-			var meshDelta = animationTime % FLIP_ANIMATION_TIME;
-			var meshIteration = Math.floor(animationTime / FLIP_ANIMATION_TIME) % meshAnimations.length;
-			meshAnimations[meshIteration](meshDelta);
-
-			var colorDelta = animationTime % COLOR_ANIMATION_TIME;
-			var colorIteration = Math.floor(animationTime / COLOR_ANIMATION_TIME) % colorAnimations.length;
-			colorAnimations[colorIteration](colorDelta);
+			if (colorAnimationTimestamp > 0) {
+				colorAnimation(cycle, colorAnimationTimestamp);
+			}
 		});
 	});
 
-	var last = 0;
+	// Finally setup the camera and renderer to start the animation.
+	//var camera = new THREE.OrthographicCamera( window.innerWidth / - 2, window.innerWidth / 2, window.innerHeight / 2, window.innerHeight / - 2, 0, 1000 );
+	var camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+	camera.position.x = window.innerWidth / 2;
+	camera.position.y = window.innerHeight / 2;
+	camera.position.z = window.innerWidth / (window.innerWidth / window.innerHeight);
+
+	var renderer = new THREE.WebGLRenderer();
+	renderer.setSize(window.innerWidth, window.innerHeight);
+	renderer.setClearColor(0x222222, 1);
 	var render = function(timestamp) {
 		requestAnimationFrame(render);
-
-		var delta = timestamp - last;
-		last = timestamp;
-
 		if (timestamp) {
 			triggers.forEach(function(trigger) {
 				trigger(timestamp);
@@ -195,9 +170,14 @@
 		
 		renderer.render(scene, camera);
 	};
-	var renderer = new THREE.WebGLRenderer();
-	renderer.setSize(window.innerWidth, window.innerHeight);
-	document.body.appendChild(renderer.domElement);
 
+	window.addEventListener('resize', function() {
+		camera.aspect = window.innerWidth / window.innerHeight;
+		camera.position.z =  window.innerWidth / (window.innerWidth / window.innerHeight);
+		camera.updateProjectionMatrix();
+		renderer.setSize(window.innerWidth, window.innerHeight);
+	}, false);
+
+	document.body.appendChild(renderer.domElement);
 	render();
 })();
