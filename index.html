@@ -11,8 +11,12 @@
 		</style>
 	</head>
 	<body>
-		<!--<script src="http://cdnjs.cloudflare.com/ajax/libs/three.js/r67/three.min.js"></script>-->
-		<script src="three.min.js"></script>
+		<script src="http://cdnjs.cloudflare.com/ajax/libs/three.js/r67/three.min.js"></script>
+		<script>
+			if (typeof THREE == 'undefined') {
+	    		document.write(unescape("%3Cscript src='three.min.js' type='text/javascript'%3E%3C/script%3E"));
+			}
+		</script>
 		<script src="mosaic.js"></script>
 	</body>
 </html>
