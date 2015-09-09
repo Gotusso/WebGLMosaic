@@ -157,27 +157,44 @@
 	camera.position.y = window.innerHeight / 2;
 	camera.position.z = window.innerWidth / (window.innerWidth / window.innerHeight);
 
-	var renderer = new THREE.WebGLRenderer();
-	renderer.setSize(window.innerWidth, window.innerHeight);
-	renderer.setClearColor(0x222222, 1);
-	var render = function(timestamp) {
-		requestAnimationFrame(render);
-		if (timestamp) {
-			triggers.forEach(function(trigger) {
-				trigger(timestamp);
-			});
+	var glChecker = function() {
+		try {
+			var canvas = document.createElement('canvas');
+			var ctx = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+			return !! ctx;
 		}
-		
-		renderer.render(scene, camera);
+		catch (e) {
+			return false;
+		}
 	};
 
-	window.addEventListener('resize', function() {
-		camera.aspect = window.innerWidth / window.innerHeight;
-		camera.position.z =  window.innerWidth / (window.innerWidth / window.innerHeight);
-		camera.updateProjectionMatrix();
+	if (glChecker()) {
+		var renderer = new THREE.WebGLRenderer();
 		renderer.setSize(window.innerWidth, window.innerHeight);
-	}, false);
+		renderer.setClearColor(0x222222, 1);
+		var render = function(timestamp) {
+			requestAnimationFrame(render);
+			if (timestamp) {
+				triggers.forEach(function(trigger) {
+					trigger(timestamp);
+				});
+			}
 
-	document.body.appendChild(renderer.domElement);
-	render();
+			renderer.render(scene, camera);
+		};
+
+		window.addEventListener('resize', function() {
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.position.z =  window.innerWidth / (window.innerWidth / window.innerHeight);
+			camera.updateProjectionMatrix();
+			renderer.setSize(window.innerWidth, window.innerHeight);
+		}, false);
+
+		document.body.appendChild(renderer.domElement);
+		render();
+	}
+	else {
+		var node = document.createTextNode('Sorry, your browser doesn\'t support WebGL.')
+		document.body.appendChild(node);
+	}
 })();
